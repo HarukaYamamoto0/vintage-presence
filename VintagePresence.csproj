@@ -5,16 +5,18 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <OutputPath>bin/$(Configuration)/Mods/mod/</OutputPath>
-        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <OutputPath>bin/$(Configuration)/Mods/vintagepresence/</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>
         <Reference Include="VintagestoryAPI">
-            <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+            <HintPath>$(VINTAGE_STORY)\VintagestoryAPI.dll</HintPath>
             <Private>false</Private>
         </Reference>
-        <PackageReference Include="DiscordRichPresence" Version="1.6.1.70"/>
+        <Reference Include="DiscordRichPresence">
+            <HintPath>libraries/DiscordRPC.dll</HintPath>
+            <Private>true</Private>
+        </Reference>
     </ItemGroup>
 
     <ItemGroup>

@@ -129,12 +129,11 @@ desktop.ini
 ##############################
 # Keep what matters           #
 ##############################
-!ZeroLossCharcoal/assets/
-!ZeroLossCharcoal/assets/**/lang/*.json
-!ZeroLossCharcoal/modinfo.json
 
 .idea
 !.idea/dictionaries/
 !.idea/dictionaries/project.xml
 
 Releases
+
+!libraries/*.dll
