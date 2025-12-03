@@ -1,0 +1,17 @@
+{
+  "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+  "type": "Code",
+  "modid": "vintagepresence",
+  "name": "Vintage Presence",
+  "authors": [
+    "harukadev"
+  ],
+  "description": "It shows your current activity and game status directly on your Discord profile in real time.",
+  "version": "1.0.0",
+  "side": "Client",
+  "dependencies": {
+    "game": "1.21.0"
+  },
+  "website": "https://harukadev.com/projects/vintagepresence",
+  "iconPath": "modicon.png"
+}

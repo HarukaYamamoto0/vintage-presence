@@ -1,0 +1,87 @@
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+
+##############################
+# Build artefacts / output  #
+##############################
+bin/
+obj/
+out/
+publish/
+*.pdb
+*.dll
+*.deps.json
+*.runtimeconfig.json
+*.xml
+*.cache
+*.tmp
+
+#################################
+# Rider / VS / VSCode metadata  #
+#################################
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+*.DotSettings.user
+
+#################################
+# NuGet                          #
+#################################
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+project.assets.json
+project.nuget.cache
+*.packagespec.json
+
+#################################
+# Build scripts cache (Cake)     #
+#################################
+ZZCakeBuild/obj/
+ZZCakeBuild/bin/
+
+#################################
+# Mod release artifacts          #
+#################################
+Releases/**/*.dll
+Releases/**/*.pdb
+Releases/**/*.deps.json
+Releases/**/*.runtimeconfig.json
+Releases/**/*.zip
+Releases/**/modinfo.json
+
+# Mantém assets e linguagem
+!Releases/**/assets/
+!Releases/**/assets/**
+
+#################################
+# Logs / debug                   #
+#################################
+*.log
+*.trace
+*.DS_Store
+
+##############################
+# Ignore OS trash             #
+##############################
+Thumbs.db
+desktop.ini
+.DS_Store
+
+##############################
+# Keep what matters           #
+##############################
+!ZeroLossCharcoal/assets/
+!ZeroLossCharcoal/assets/**/lang/*.json
+!ZeroLossCharcoal/modinfo.json
+
+.idea
+!.idea/dictionaries/
+!.idea/dictionaries/project.xml
+
+Releases
