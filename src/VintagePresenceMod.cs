@@ -20,6 +20,11 @@ public sealed class VintagePresenceMod : ModSystem
 
     private static readonly DiscordService Discord = new();
 
+    public override bool ShouldLoad(EnumAppSide forSide)
+    {
+        return forSide == EnumAppSide.Client;
+    }
+
     public override void Start(ICoreAPI api)
     {
         base.Start(api);
