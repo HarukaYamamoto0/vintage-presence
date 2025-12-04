@@ -1,13 +1,19 @@
 using DiscordRPC;
 
-namespace VintagePresence;
+namespace VintagePresence.Discord;
 
+/// <summary>
+/// Service for managing Discord Rich Presence integration.
+/// Handles connection lifecycle, activity updates, and status notifications.
+/// </summary>
 public sealed class DiscordService : IDisposable
 {
+    // Constants for Discord Rich Presence field length limits
     private const int MaxDetailsLength = 128;
     private const int MaxStateLength = 128;
     private const int MaxImageTextLength = 128;
     private const int MaxButtonLabelLength = 32;
+    private const char InvisibleFillerChar = '\u3164';
 
     private DiscordRpcClient? _client;
     private DiscordActivityOptions? _currentActivity;
@@ -21,23 +27,21 @@ public sealed class DiscordService : IDisposable
     /// </remarks>
     public Action<string>? OnStatusChange { get; set; }
 
-    // ReSharper disable once MemberCanBePrivate.Global
     /// <summary>
-    /// Indicates whether the underlying Discord RPC client is currently initialized.
+    /// Indicates whether the underlying Discord RPC client is currently initialized and connected.
     /// </summary>
+    // ReSharper disable once MemberCanBePrivate.Global
     public bool IsConnected => _client?.IsInitialized == true;
 
     /// <summary>
-    /// Creates and configures the underlying Discord RPC client for the given application id.
+    /// Initializes the Discord RPC client with the specified application ID.
     /// </summary>
-    /// <param name="clientId">Discord application id used for Rich Presence.</param>
-    /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="clientId"/> is null, empty, or whitespace.
-    /// </exception>
+    /// <param name="clientId">Discord application ID used for Rich Presence.</param>
+    /// <exception cref="ArgumentException">Thrown when clientId is null, empty, or whitespace.</exception>
     public void Init(string clientId)
     {
         if (string.IsNullOrWhiteSpace(clientId))
-            throw new ArgumentException("Client id cannot be null or empty.", nameof(clientId));
+            throw new ArgumentException("Client ID cannot be null or empty.", nameof(clientId));
 
         DisposeClient();
 
@@ -49,16 +53,9 @@ public sealed class DiscordService : IDisposable
             )
         };
 
+        // Register event handlers for connection state changes
         _client.OnConnectionEstablished += (_, _) => NotifyStatus("connected");
-
-        _client.OnReady += (_, _) =>
-        {
-            NotifyStatus("ready");
-
-            if (_currentActivity is not null)
-                UpdateActivity(_currentActivity);
-        };
-
+        _client.OnReady += (_, _) => HandleClientReady();
         _client.OnClose += (_, _) => NotifyStatus("disconnected");
         _client.OnError += (_, _) => NotifyStatus("error");
     }
@@ -66,9 +63,7 @@ public sealed class DiscordService : IDisposable
     /// <summary>
     /// Connects the Discord RPC client if it has been initialized and is not yet connected.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when the client has not been initialized via <see cref="Init"/>.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">Thrown when the client has not been initialized.</exception>
     public void Connect()
     {
         if (_client is null)
@@ -80,7 +75,6 @@ public sealed class DiscordService : IDisposable
         _client.Initialize();
     }
 
-    // ReSharper disable once MemberCanBePrivate.Global
     /// <summary>
     /// Disconnects and disposes the Discord RPC client and clears the current activity.
     /// </summary>
@@ -88,6 +82,7 @@ public sealed class DiscordService : IDisposable
     /// After calling this method, the client instance is released and
     /// <see cref="IsConnected"/> will return false.
     /// </remarks>
+    // ReSharper disable once MemberCanBePrivate.Global
     public void Disconnect()
     {
         DisposeClient();
@@ -98,16 +93,12 @@ public sealed class DiscordService : IDisposable
     /// <summary>
     /// Updates the Rich Presence activity and sends it to Discord if the client is connected.
     /// </summary>
-    /// <param name="activity">
-    /// Activity options describing details, state, images, timestamps, and buttons.
-    /// </param>
+    /// <param name="activity">Activity options describing details, state, images, timestamps, and buttons.</param>
     /// <remarks>
     /// The activity is always cached internally. If the client is not yet connected,
     /// it will be sent automatically the next time the client becomes ready.
     /// </remarks>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="activity"/> is null.
-    /// </exception>
+    /// <exception cref="ArgumentNullException">Thrown when activity is null.</exception>
     public void UpdateActivity(DiscordActivityOptions activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
@@ -119,7 +110,6 @@ public sealed class DiscordService : IDisposable
 
         var presence = BuildRichPresence(activity);
         _client!.SetPresence(presence);
-
         NotifyStatus("activity_updated");
     }
 
@@ -142,6 +132,16 @@ public sealed class DiscordService : IDisposable
     }
 
     /// <summary>
+    /// Handles the client ready event, notifies status, and updates cached activity if available.
+    /// </summary>
+    private void HandleClientReady()
+    {
+        NotifyStatus("ready");
+        if (_currentActivity is not null)
+            UpdateActivity(_currentActivity);
+    }
+
+    /// <summary>
     /// Builds a RichPresence payload from the given activity options.
     /// </summary>
     /// <param name="activity">Activity options used to populate the presence fields.</param>
@@ -153,14 +153,36 @@ public sealed class DiscordService : IDisposable
     {
         var presence = new RichPresence();
 
+        // Set details and state with proper truncation and padding
         if (!string.IsNullOrWhiteSpace(activity.Details))
             presence.Details = PadToMinLength(Truncate(activity.Details, MaxDetailsLength));
 
         if (!string.IsNullOrWhiteSpace(activity.State))
             presence.State = PadToMinLength(Truncate(activity.State, MaxStateLength));
 
+        // Configure assets (images)
         var assets = new Assets();
+        ConfigureAssets(activity, assets);
+        presence.Assets = assets;
 
+        // Configure timestamps if enabled
+        ConfigureTimestamps(activity, presence);
+
+        // Configure buttons if any are defined
+        var buttons = BuildButtons(activity);
+        if (buttons.Count > 0)
+            presence.Buttons = buttons.ToArray();
+
+        return presence;
+    }
+
+    /// <summary>
+    /// Configures the assets (images) for the Rich Presence.
+    /// </summary>
+    /// <param name="activity">Activity options containing image configuration.</param>
+    /// <param name="assets">Assets object to configure.</param>
+    private static void ConfigureAssets(DiscordActivityOptions activity, Assets assets)
+    {
         if (!string.IsNullOrWhiteSpace(activity.LargeImageKey))
             assets.LargeImageKey = activity.LargeImageKey;
 
@@ -176,25 +198,25 @@ public sealed class DiscordService : IDisposable
             assets.SmallImageText = PadToMinLength(
                 Truncate(activity.SmallImageText, MaxImageTextLength)
             );
+    }
 
-        presence.Assets = assets;
+    /// <summary>
+    /// Configures timestamps for the Rich Presence based on activity settings.
+    /// </summary>
+    /// <param name="activity">Activity options containing timestamp configuration.</param>
+    /// <param name="presence">RichPresence object to configure.</param>
+    private static void ConfigureTimestamps(DiscordActivityOptions activity, RichPresence presence)
+    {
+        if (!activity.UseTimestamp)
+            return;
 
-        if (activity.UseTimestamp)
+        presence.Timestamps = activity.TimestampMode switch
         {
-            presence.Timestamps = activity.TimestampMode switch
-            {
-                DiscordTimestampMode.Elapsed => new Timestamps(DateTime.UtcNow),
-                DiscordTimestampMode.Remaining when activity.EndTimeSeconds.HasValue
-                    => BuildRemainingTimestamp(activity.EndTimeSeconds.Value),
-                _ => presence.Timestamps
-            };
-        }
-
-        var buttons = BuildButtons(activity);
-        if (buttons.Count > 0)
-            presence.Buttons = buttons.ToArray();
-
-        return presence;
+            DiscordTimestampMode.Elapsed => new Timestamps(DateTime.UtcNow),
+            DiscordTimestampMode.Remaining when activity.EndTimeSeconds.HasValue
+                => BuildRemainingTimestamp(activity.EndTimeSeconds.Value),
+            _ => presence.Timestamps ?? new Timestamps()
+        };
     }
 
     /// <summary>
@@ -208,27 +230,29 @@ public sealed class DiscordService : IDisposable
     {
         var buttons = new List<Button>(2);
 
-        if (!string.IsNullOrWhiteSpace(activity.Button1Label) &&
-            !string.IsNullOrWhiteSpace(activity.Button1Url))
-        {
-            buttons.Add(new Button
-            {
-                Label = Truncate(activity.Button1Label, MaxButtonLabelLength),
-                Url = activity.Button1Url
-            });
-        }
-
-        if (!string.IsNullOrWhiteSpace(activity.Button2Label) &&
-            !string.IsNullOrWhiteSpace(activity.Button2Url))
-        {
-            buttons.Add(new Button
-            {
-                Label = Truncate(activity.Button2Label, MaxButtonLabelLength),
-                Url = activity.Button2Url
-            });
-        }
+        AddButtonIfValid(activity.Button1Label, activity.Button1Url, buttons);
+        AddButtonIfValid(activity.Button2Label, activity.Button2Url, buttons);
 
         return buttons;
+    }
+
+    /// <summary>
+    /// Adds a button to the collection if both label and URL are valid.
+    /// </summary>
+    /// <param name="label">Button label text.</param>
+    /// <param name="url">Button URL target.</param>
+    /// <param name="buttons">Button collection to add to.</param>
+    private static void AddButtonIfValid(string? label, string? url, List<Button> buttons)
+    {
+        if (!string.IsNullOrWhiteSpace(label) && 
+            !string.IsNullOrWhiteSpace(url))
+        {
+            buttons.Add(new Button
+            {
+                Label = Truncate(label, MaxButtonLabelLength),
+                Url = url
+            });
+        }
     }
 
     /// <summary>
@@ -278,20 +302,14 @@ public sealed class DiscordService : IDisposable
     /// <param name="value">Input string to pad.</param>
     /// <param name="minLength">Minimum required length for the string.</param>
     /// <returns>
-    /// The padded string is shorter than <paramref name="minLength"/>;
-    /// otherwise the original string.
+    /// The padded string is shorter than minLength; otherwise the original string.
     /// </returns>
     private static string PadToMinLength(string value, int minLength = 2)
     {
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value) || value.Length >= minLength)
             return value;
 
-        const char filler = '\u3164';
-
-        if (value.Length > 0 && value.Length < minLength)
-            return value + new string(filler, minLength - value.Length);
-
-        return value;
+        return value + new string(InvisibleFillerChar, minLength - value.Length);
     }
 
     /// <summary>

@@ -6,6 +6,16 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <OutputPath>bin/$(Configuration)/Mods/vintagepresence/</OutputPath>
+
+        <ZipName>vintage_presence</ZipName>
+        <ModVersion>1.0.0</ModVersion>
+        <ReleaseDir>$(ProjectDir)Releases</ReleaseDir>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <GenerateDependencyFile>false</GenerateDependencyFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -36,5 +46,27 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+
+    <Target Name="ZipMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+        <Error
+                Condition="!Exists('$(OutputPath)')"
+                Text="Mod output folder not found: $(OutputPath)"/>
+
+        <MakeDir Directories="$(ReleaseDir)"/>
+
+        <PropertyGroup>
+            <ZipFile>$(ReleaseDir)/$(ZipName)_v$(ModVersion).zip</ZipFile>
+        </PropertyGroup>
+
+        <Message
+                Text="Zipping directory '$(OutputPath)' to '$(ZipFile)'."
+                Importance="High"/>
+
+        <ZipDirectory
+                SourceDirectory="$(OutputPath)"
+                DestinationFile="$(ZipFile)"
+                Overwrite="true"/>
+    </Target>
 
 </Project>

@@ -1,4 +1,5 @@
-﻿using Vintagestory.API.Client;
+﻿using VintagePresence.Discord;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
 namespace VintagePresence;
@@ -6,14 +7,11 @@ namespace VintagePresence;
 // ReSharper disable once UnusedType.Global
 public sealed class VintagePresenceMod : ModSystem
 {
-    private const string ModLogPrefix = "[VintagePresence]";
-    private const string ApplicationId = "1445733433153425468";
-
-    private const string LargeImageKey = "game_icon";
-    private const string LargeImageText = "Game is Vintage Story";
-    private const string SmallImageKey = "gear_icon";
-
-    private const int UpdateIntervalInMs = 5000;
+    private const string ModLogPrefix = Constants.ModLogPrefix;
+    private const string ApplicationId = Constants.ApplicationId;
+    private const string LargeImageKey = Constants.DefaultLargeImageKey;
+    private const string SmallImageKey = Constants.DefaultSmallImageKey;
+    private const int UpdateIntervalInMs = Constants.DefaultUpdateIntervalInMs;
 
     private ICoreClientAPI? _capi;
     private long _listenerId;
@@ -70,15 +68,11 @@ public sealed class VintagePresenceMod : ModSystem
                 Details = BuildDetails(player),
                 State = BuildState(capi),
                 LargeImageKey = LargeImageKey,
-                LargeImageText = LargeImageText,
                 SmallImageKey = SmallImageKey,
                 SmallImageText = BuildSmallImageText(player),
 
                 UseTimestamp = true,
-                TimestampMode = DiscordTimestampMode.Remaining,
-
-                Button1Label = "Download the mod",
-                Button1Url = "https://mods.vintagestory.at/vintagepresence"
+                TimestampMode = DiscordTimestampMode.Remaining
             };
 
             Discord.UpdateActivity(activity);
