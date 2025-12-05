@@ -12,11 +12,13 @@ public sealed class VintagePresenceMod : ModSystem
     private const string ApplicationId = Constants.ApplicationId;
     private const string LargeImageKey = Constants.DefaultLargeImageKey;
     private const string SmallImageKey = Constants.DefaultSmallImageKey;
-    private const int UpdateIntervalInMs = Constants.DefaultUpdateIntervalInMs;
 
     private ICoreClientAPI? _capi;
-    private SettingsGuiDialog? _settingsGuiDialog;
+    private VintagePresenceConfig? _config;
+    private ConfigGuiDialog? _settingsGuiDialog;
     private long _listenerId;
+
+    private int _updateIntervalInMs;
 
     private static readonly DiscordService Discord = new();
 
@@ -28,7 +30,7 @@ public sealed class VintagePresenceMod : ModSystem
     public override void Start(ICoreAPI api)
     {
         base.Start(api);
-        api.Logger.Event($"{ModLogPrefix} loaded (common)");
+        api.Logger.Event($"{ModLogPrefix} loaded");
     }
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -36,13 +38,17 @@ public sealed class VintagePresenceMod : ModSystem
         base.StartClientSide(api);
         _capi = api;
 
-        _settingsGuiDialog = new SettingsGuiDialog(_capi);
+        _config = VintagePresenceConfig.GetSettings(api);
+        _config.Validate(api);
+        _updateIntervalInMs = _config.UpdateIntervalSeconds * 1000;
+
+        _settingsGuiDialog = new ConfigGuiDialog(_capi);
         _settingsGuiDialog.RegisterHotKey();
 
         Discord.OnStatusChange = status =>
         {
-            if (status == "activity_updated") return; // Do not register this unless it is under development.
-            api.Logger.Event($"{ModLogPrefix} Discord status changed to {status}");
+            if (!_config.DebugLogging) return;
+            _capi.Logger.Event($"{ModLogPrefix} Discord status changed to {status}");
         };
 
         Discord.Init(ApplicationId);
@@ -51,8 +57,8 @@ public sealed class VintagePresenceMod : ModSystem
         // initially snapshot
         UpdatePresence(0);
 
-        _listenerId = api.Event.RegisterGameTickListener(UpdatePresence, UpdateIntervalInMs);
-        api.Logger.Event($"{ModLogPrefix} client-side started");
+        _listenerId = _capi.Event.RegisterGameTickListener(UpdatePresence, _updateIntervalInMs);
+        if (_config.DebugLogging) _capi.Logger.Event($"{ModLogPrefix} client-side started");
     }
 
     private void UpdatePresence(float _)
@@ -70,8 +76,8 @@ public sealed class VintagePresenceMod : ModSystem
         {
             var activity = new DiscordActivityOptions
             {
-                Details = BuildDetails(player),
-                State = BuildState(capi),
+                Details = _config?.DetailsTemplate ?? BuildDetails(player),
+                State = _config?.StateTemplate ?? BuildState(capi),
                 LargeImageKey = LargeImageKey,
                 SmallImageKey = SmallImageKey,
                 SmallImageText = BuildSmallImageText(player),
@@ -84,13 +90,15 @@ public sealed class VintagePresenceMod : ModSystem
         }
         catch (Exception ex)
         {
-            capi.Logger.Error($"{ModLogPrefix} Failed to update presence: {ex}");
+            if (_config is { DebugLogging: true })
+            {
+                capi.Logger.Error($"{ModLogPrefix} Failed to update presence: {ex}");
+            }
         }
     }
 
     private static string BuildDetails(IClientPlayer player)
     {
-        // This can be varied later depending on the game mode, world, etc.
         var mode = player.WorldData.CurrentGameMode;
         return mode switch
         {
