@@ -1,4 +1,5 @@
 ﻿using VintagePresence.Discord;
+using VintagePresence.GUI;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
@@ -14,6 +15,7 @@ public sealed class VintagePresenceMod : ModSystem
     private const int UpdateIntervalInMs = Constants.DefaultUpdateIntervalInMs;
 
     private ICoreClientAPI? _capi;
+    private SettingsGuiDialog? _settingsGuiDialog;
     private long _listenerId;
 
     private static readonly DiscordService Discord = new();
@@ -33,6 +35,9 @@ public sealed class VintagePresenceMod : ModSystem
     {
         base.StartClientSide(api);
         _capi = api;
+
+        _settingsGuiDialog = new SettingsGuiDialog(_capi);
+        _settingsGuiDialog.RegisterHotKey();
 
         Discord.OnStatusChange = status =>
         {
