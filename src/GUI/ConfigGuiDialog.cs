@@ -11,14 +11,16 @@ public class ConfigGuiDialog : GuiDialog
     public override string ToggleKeyCombinationCode => Constants.ToggleKeyCombinationCode;
     public override bool DisableMouseGrab => true;
 
+    private VintagePresenceConfig _originalConfig;
     private VintagePresenceConfig _config;
 
     public ConfigGuiDialog(ICoreClientAPI capi) : base(capi)
     {
         var liveConfig = VintagePresenceMod.LoadConfig(capi);
 
-        // Always work with a local copy so as not to affect the mod until you save.
-        _config = liveConfig.Clone();
+        _originalConfig = liveConfig.Clone();
+        _config = _originalConfig.Clone();
+
         SetupDialog();
     }
 
@@ -30,7 +32,7 @@ public class ConfigGuiDialog : GuiDialog
 
         var composer = capi.Gui.CreateCompo(DialogId, dialogBounds)
             .AddShadedDialogBG(bgBounds)
-            .AddDialogTitleBar("Presence Settings", OnTitleBarCloseClicked)
+            .AddDialogTitleBar("Presence Settings", OnTryClose) // fechar = cancelar alterações
             .BeginChildElements(bgBounds)
 
             // Details template
@@ -126,7 +128,6 @@ public class ConfigGuiDialog : GuiDialog
 
         if (wasCorrect)
         {
-            // If a correction was made, update the UI to show the corrected values.
             SingleComposer.GetTextInput("DetailsTemplate").SetValue(_config.DetailsTemplate);
             SingleComposer.GetTextInput("StateTemplate").SetValue(_config.StateTemplate);
             SingleComposer.GetTextInput("LargeImageText").SetValue(_config.LargeImageText);
@@ -139,10 +140,14 @@ public class ConfigGuiDialog : GuiDialog
 
             capi.ShowChatMessage(
                 $"{Constants.ModLogPrefix} Some settings were corrected. Please review before closing.");
-            return true; // Keep it open for the user to see the fixes.
+            return true;
         }
 
-        VintagePresenceMod.SaveConfig(capi, _config);
+        var configClone = _config.Clone();
+        VintagePresenceMod.SaveConfig(capi, configClone);
+
+        _originalConfig = configClone.Clone();
+
         TryClose();
         return true;
     }
@@ -151,15 +156,24 @@ public class ConfigGuiDialog : GuiDialog
     {
         _config = VintagePresenceConfig.CreateDefault();
 
-        // Rebuilds the dialog with the default values.
-        SingleComposer?.Dispose();
-        SetupDialog();
+        SingleComposer.GetTextInput("DetailsTemplate").SetValue(_config.DetailsTemplate);
+        SingleComposer.GetTextInput("StateTemplate").SetValue(_config.StateTemplate);
+        SingleComposer.GetTextInput("LargeImageText").SetValue(_config.LargeImageText);
+        SingleComposer.GetTextInput("SmallImageText").SetValue(_config.SmallImageText);
+
+        SingleComposer.GetDropDown("LargeImageKey").SetSelectedIndex(
+            Array.IndexOf(Constants.LargeImageOptions, _config.LargeImageKey));
+        SingleComposer.GetDropDown("SmallImageKey").SetSelectedIndex(
+            Array.IndexOf(Constants.SmallImageOptions, _config.SmallImageKey));
+
+        SingleComposer.GetSwitch("DebugLogging").SetValue(_config.DebugLogging);
 
         return true;
     }
 
     private bool OnCancel()
     {
+        _config = _originalConfig.Clone();
         TryClose();
         return true;
     }
@@ -178,7 +192,7 @@ public class ConfigGuiDialog : GuiDialog
         capi.Input.SetHotKeyHandler(Constants.ToggleKeyCombinationCode, _ =>
         {
             if (IsOpened())
-                TryClose();
+                OnTryClose();
             else
                 TryOpen();
 
@@ -186,8 +200,29 @@ public class ConfigGuiDialog : GuiDialog
         });
     }
 
-    private void OnTitleBarCloseClicked()
+    private void OnTryClose()
     {
+        _config = _originalConfig.Clone();
         TryClose();
+    }
+
+    public override void OnGuiOpened()
+    {
+        base.OnGuiOpened();
+
+        var liveConfig = VintagePresenceMod.LoadConfig(capi);
+        _originalConfig = liveConfig.Clone();
+        _config = _originalConfig.Clone();
+
+        if (SingleComposer == null) return;
+        SingleComposer.GetTextInput("DetailsTemplate").SetValue(_config.DetailsTemplate);
+        SingleComposer.GetTextInput("StateTemplate").SetValue(_config.StateTemplate);
+        SingleComposer.GetTextInput("LargeImageText").SetValue(_config.LargeImageText);
+        SingleComposer.GetTextInput("SmallImageText")?.SetValue(_config.SmallImageText);
+        SingleComposer.GetDropDown("LargeImageKey").SetSelectedIndex(
+            Array.IndexOf(Constants.LargeImageOptions, _config.LargeImageKey));
+        SingleComposer.GetDropDown("SmallImageKey").SetSelectedIndex(
+            Array.IndexOf(Constants.SmallImageOptions, _config.SmallImageKey));
+        SingleComposer.GetSwitch("DebugLogging").SetValue(_config.DebugLogging);
     }
 }

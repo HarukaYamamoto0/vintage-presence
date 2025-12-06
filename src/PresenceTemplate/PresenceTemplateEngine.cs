@@ -10,8 +10,8 @@ public class PresenceTemplateEngine
         {
             ["gamemode"] = ctx => ctx.GameMode,
             ["day"] = ctx => ctx.Day?.ToString(),
-            ["time"] = ctx => ctx.TimeOfDay,
-            ["player"] = ctx => ctx.PlayerName,
+            ["timeofday"] = ctx => ctx.TimeOfDay,
+            ["playername"] = ctx => ctx.PlayerName,
             ["health"] = ctx => ctx.Health is null || ctx.MaxHealth is null
                 ? null
                 : $"{ctx.Health:0.#} / {ctx.MaxHealth:0.#}",
@@ -24,8 +24,8 @@ public class PresenceTemplateEngine
             ["temperature"] = ctx => ctx.Temperature?.ToString("0.#"),
             ["weather"] = ctx => ctx.Weather,
             ["season"] = ctx => ctx.Season,
-            ["version"] = ctx => ctx.ModVersion,
-            ["mod"] = _ => "Vintage Presence",
+            ["modversion"] = ctx => ctx.ModVersion,
+            ["gameversion"] = ctx => ctx.GameVersion,
             ["nl"] = _ => "\n"
         };
     }
