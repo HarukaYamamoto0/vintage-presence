@@ -7,7 +7,7 @@
     "harukadev"
   ],
   "description": "It shows your current activity and game status directly on your Discord profile in real time.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "side": "Client",
   "dependencies": {
     "game": "1.21.0"
