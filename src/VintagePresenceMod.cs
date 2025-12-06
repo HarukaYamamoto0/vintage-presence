@@ -1,7 +1,9 @@
 ﻿using VintagePresence.Discord;
 using VintagePresence.GUI;
+using VintagePresence.PresenceTemplate;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 
 namespace VintagePresence;
 
@@ -32,6 +34,7 @@ public sealed class VintagePresenceMod : ModSystem
         InitializeDiscord();
         InitializeGui(api);
 
+        Discord.ClearActivity();
         UpdatePresence(0);
         _updateListenerId = api.Event.RegisterGameTickListener(UpdatePresence, Constants.UpdateIntervalInMs);
 
@@ -58,13 +61,19 @@ public sealed class VintagePresenceMod : ModSystem
 
         try
         {
+            var ctx = BuildPresenceContext();
+
+            var engine = new PresenceTemplateEngine();
+            var details = engine.Render(_config.DetailsTemplate, ctx);
+            var state = engine.Render(_config.StateTemplate, ctx);
+
             var smallImageKey = _config.SmallImageKey;
             if (smallImageKey == "none") smallImageKey = null;
 
             var activity = new DiscordActivityOptions
             {
-                Details = _config.DetailsTemplate,
-                State = _config.StateTemplate,
+                Details = details,
+                State = state,
                 LargeImageKey = _config.LargeImageKey,
                 LargeImageText = _config.LargeImageText,
                 SmallImageKey = smallImageKey,
@@ -80,6 +89,75 @@ public sealed class VintagePresenceMod : ModSystem
             if (_config.DebugLogging)
                 _capi?.Logger.Error($"{Constants.ModLogPrefix} Failed to update presence: {ex}");
         }
+    }
+
+    private PresenceContext BuildPresenceContext()
+    {
+        if (_capi?.World?.Player is null)
+            throw new InvalidOperationException("Cannot build PresenceContext without a valid player/world.");
+
+        var world = _capi.World;
+        var player = world.Player;
+        var entity = player.Entity;
+        var calendar = world.Calendar;
+        var pos = entity.Pos.AsBlockPos;
+
+        // Climate
+        var climate = world.BlockAccessor.GetClimateAt(pos);
+
+        // Health
+        var healthTree = entity.WatchedAttributes?.GetTreeAttribute("health");
+        var curHealth = healthTree?.GetFloat("currenthealth") ?? 0f;
+        var maxHealth = healthTree?.GetFloat("maxhealth") ?? 0f;
+
+        var totalDays = calendar.ElapsedDays;
+        var hour = calendar.HourOfDay;
+
+        // Time of day
+        var timeOfDay = hour switch
+        {
+            >= 5 and < 10 => "Morning",
+            >= 10 and < 17 => "Day",
+            >= 17 and < 21 => "Evening",
+            _ => "Night"
+        };
+
+        // Weather
+        var distanceToRain = world.BlockAccessor.GetDistanceToRainFall(pos);
+        var isRaining = distanceToRain < 5;
+
+        var weather = climate?.Temperature switch
+        {
+            <= 0f when isRaining => "Snow",
+            <= 0f => "Cold",
+            _ when isRaining => "Rain",
+            _ => "Clear"
+        };
+
+        // Season
+        var seasonEnum = calendar.GetSeason(pos);
+        var season = seasonEnum.ToString();
+
+        var onlinePlayers = world.AllOnlinePlayers.Length;
+        var deaths = player.WorldData.Deaths;
+
+        return new PresenceContext
+        {
+            GameMode = player.WorldData.CurrentGameMode.ToString(),
+            Day = (int)totalDays,
+            TimeOfDay = timeOfDay,
+            PlayerName = player.PlayerName,
+            Health = curHealth,
+            MaxHealth = maxHealth,
+            Deaths = deaths,
+            OnlinePlayers = onlinePlayers,
+            Temperature = climate?.Temperature ?? 0f,
+            Weather = weather,
+            Season = season,
+            Coords = $"{pos.X}, {pos.Y}, {pos.Z}",
+            ModVersion = Mod?.Info?.Version ?? "dev",
+            GameVersion = GameVersion.ShortGameVersion,
+        };
     }
 
     public static VintagePresenceConfig LoadConfig(ICoreAPI api)
@@ -117,14 +195,24 @@ public sealed class VintagePresenceMod : ModSystem
 
     public override void Dispose()
     {
+        LogDebug("Disposing mod...");
+
         if (_updateListenerId != 0 && _capi is not null)
         {
             _capi.Event.UnregisterGameTickListener(_updateListenerId);
             _updateListenerId = 0;
         }
 
-        Discord.ClearActivity();
-        Discord.Dispose();
+        try
+        {
+            Discord.ClearActivity();
+            Thread.Sleep(500);
+            Discord.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _capi?.Logger.Warning($"{Constants.ModLogPrefix} Error disposing Discord: {ex.Message}");
+        }
 
         base.Dispose();
     }
