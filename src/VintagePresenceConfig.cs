@@ -1,68 +1,83 @@
-// ReSharper disable MemberCanBePrivate.Global
-// ReSharper disable UnusedAutoPropertyAccessor.Global
-// ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
-
-using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
+
+// ReSharper disable RedundantDefaultMemberInitializer
 
 namespace VintagePresence;
 
-public partial class VintagePresenceConfig
+public class VintagePresenceConfig
 {
-    // Discord Settings
-    public string DiscordAppId { get; set; } = Constants.ApplicationId;
-
     // Template Settings
-    public string DetailsTemplate { get; set; } = "Playing as {player}";
-    public string StateTemplate { get; set; } = "{deaths} deaths | {online}/{maxplayers} online";
+    public string DetailsTemplate { get; set; } = Constants.DefaultDetailsTemplate;
+    public string StateTemplate { get; set; } = Constants.DefaultStateTemplate;
     public string LargeImageKey { get; set; } = Constants.DefaultLargeImageKey;
-    public string LargeImageText { get; set; } = "Vintage Story";
+    public string LargeImageText { get; set; } = Constants.DefaultLargeImageText;
     public string SmallImageKey { get; set; } = Constants.DefaultSmallImageKey;
-    public string SmallImageText { get; set; } = "{deaths}";
-
-    // Update Settings
-    public int UpdateIntervalSeconds { get; set; } = 10;
-    public bool EnableRichPresence { get; set; } = true;
-
-    // Privacy Settings
-    public bool ShowPlayerName { get; set; } = true;
-    public bool ShowServerInfo { get; set; } = true;
-    public bool ShowDeaths { get; set; } = true;
-    public bool ShowPlaytime { get; set; } = true;
+    public string SmallImageText { get; set; } = Constants.DefaultSmallImageText;
 
     // Advanced
-    public bool ShowTimestamp { get; set; } = true;
-    public bool ResetOnDeath { get; set; } = false;
     public bool DebugLogging { get; set; } = false;
     public bool IsFirstTime { get; set; } = true;
 
-    public void Validate(ICoreAPI api)
+    /// <summary>
+    /// Validates and corrects invalid configuration values.
+    /// </summary>
+    /// <returns>True if any value has been corrected.</returns>
+    public bool Validate(ICoreAPI api)
     {
-        // Validate ApplicationId
-        if (!string.IsNullOrWhiteSpace(DiscordAppId)) return;
-        api.Logger.Warning(
-            "The Discord app ID is not configured correctly. Using default...");
-        DiscordAppId = Constants.ApplicationId;
+        var corrected = false;
 
-        UpdateIntervalSeconds = Math.Max(5, UpdateIntervalSeconds); // Not very often, and it shouldn't be.
+        // Validate templates (they cannot be empty).
+        if (string.IsNullOrWhiteSpace(DetailsTemplate))
+        {
+            api.Logger.Warning($"{Constants.ModLogPrefix} Details template is empty. Using default.");
+            DetailsTemplate = Constants.DefaultDetailsTemplate;
+            corrected = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(StateTemplate))
+        {
+            api.Logger.Warning($"{Constants.ModLogPrefix} State template is empty. Using default.");
+            StateTemplate = Constants.DefaultStateTemplate;
+            corrected = true;
+        }
+
+        // Validate Large Image Key
+        if (string.IsNullOrWhiteSpace(LargeImageKey) ||
+            !Constants.LargeImageOptions.Contains(LargeImageKey))
+        {
+            api.Logger.Warning($"{Constants.ModLogPrefix} Invalid large image key '{LargeImageKey}'. Using default.");
+            LargeImageKey = Constants.DefaultLargeImageKey;
+            corrected = true;
+        }
+
+        // Validate Small Image Key
+        if (!string.IsNullOrWhiteSpace(SmallImageKey) &&
+            Constants.SmallImageOptions.Contains(SmallImageKey)) return corrected;
+
+        api.Logger.Warning($"{Constants.ModLogPrefix} Invalid small image key '{SmallImageKey}'. Using default.");
+        SmallImageKey = Constants.DefaultSmallImageKey;
+        corrected = true;
+
+        return corrected;
     }
 
-    public static VintagePresenceConfig GetSettings(ICoreAPI api)
+    /// <summary>
+    /// Creates a configuration with clean default values.
+    /// </summary>
+    public static VintagePresenceConfig CreateDefault()
     {
-        var config = api.LoadModConfig<VintagePresenceConfig>(Constants.ConfigFile);
-
-        if (config == null)
+        return new VintagePresenceConfig
         {
-            config = new VintagePresenceConfig { IsFirstTime = true };
-            api.StoreModConfig(config, Constants.ConfigFile);
-            api.Logger.Event($"{Constants.ModLogPrefix} Created new config file");
-        }
-        else if (config.IsFirstTime)
-        {
-            config.IsFirstTime = false;
-            api.StoreModConfig(config, Constants.ConfigFile);
-        }
+            IsFirstTime = false
+        };
+    }
 
-        return config;
+    /// <summary>
+    /// Creates a shallow copy of the current configuration instance.
+    /// </summary>
+    /// <returns>A new instance of <see cref="VintagePresenceConfig"/> with the same values as the current instance.</returns>
+    public VintagePresenceConfig Clone()
+    {
+        return (VintagePresenceConfig)MemberwiseClone();
     }
 }

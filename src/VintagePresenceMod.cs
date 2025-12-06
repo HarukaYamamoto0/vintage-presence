@@ -5,135 +5,122 @@ using Vintagestory.API.Common;
 
 namespace VintagePresence;
 
-// ReSharper disable once UnusedType.Global
+// ReSharper disable once ClassNeverInstantiated.Global
 public sealed class VintagePresenceMod : ModSystem
 {
-    private const string ModLogPrefix = Constants.ModLogPrefix;
-    private const string ApplicationId = Constants.ApplicationId;
-    private const string LargeImageKey = Constants.DefaultLargeImageKey;
-    private const string SmallImageKey = Constants.DefaultSmallImageKey;
-
     private ICoreClientAPI? _capi;
-    private VintagePresenceConfig? _config;
-    private ConfigGuiDialog? _settingsGuiDialog;
-    private long _listenerId;
+    private ConfigGuiDialog? _settingsDialog;
+    private long _updateListenerId;
 
-    private int _updateIntervalInMs;
-
+    private static VintagePresenceConfig _config = null!;
     private static readonly DiscordService Discord = new();
 
-    public override bool ShouldLoad(EnumAppSide forSide)
-    {
-        return forSide == EnumAppSide.Client;
-    }
+    public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
     public override void Start(ICoreAPI api)
     {
         base.Start(api);
-        api.Logger.Event($"{ModLogPrefix} loaded");
+        api.Logger.Event($"{Constants.ModLogPrefix} loaded");
     }
 
     public override void StartClientSide(ICoreClientAPI api)
     {
         base.StartClientSide(api);
         _capi = api;
+        _config = LoadConfig(api);
 
-        _config = VintagePresenceConfig.GetSettings(api);
-        _config.Validate(api);
-        _updateIntervalInMs = _config.UpdateIntervalSeconds * 1000;
+        InitializeDiscord();
+        InitializeGui(api);
 
-        _settingsGuiDialog = new ConfigGuiDialog(_capi);
-        _settingsGuiDialog.RegisterHotKey();
-
-        Discord.OnStatusChange = status =>
-        {
-            if (!_config.DebugLogging) return;
-            _capi.Logger.Event($"{ModLogPrefix} Discord status changed to {status}");
-        };
-
-        Discord.Init(ApplicationId);
-        Discord.Connect();
-
-        // initially snapshot
         UpdatePresence(0);
+        _updateListenerId = api.Event.RegisterGameTickListener(UpdatePresence, Constants.UpdateIntervalInMs);
 
-        _listenerId = _capi.Event.RegisterGameTickListener(UpdatePresence, _updateIntervalInMs);
-        if (_config.DebugLogging) _capi.Logger.Event($"{ModLogPrefix} client-side started");
+        LogDebug("Client-side started");
+    }
+
+    private void InitializeDiscord()
+    {
+        Discord.OnStatusChange = status => LogDebug($"Discord status changed to {status}");
+        Discord.Init(Constants.ApplicationId);
+        Discord.Connect();
+    }
+
+    private void InitializeGui(ICoreClientAPI api)
+    {
+        _settingsDialog = new ConfigGuiDialog(api);
+        _settingsDialog.RegisterHotKey();
     }
 
     private void UpdatePresence(float _)
     {
-        var capi = _capi;
-        // ReSharper disable once UseNullPropagation
-        if (capi is null)
-            return;
-
-        var player = capi.World?.Player;
-        if (player is null)
+        if (_capi?.World?.Player is null)
             return;
 
         try
         {
+            var smallImageKey = _config.SmallImageKey;
+            if (smallImageKey == "none") smallImageKey = null;
+
             var activity = new DiscordActivityOptions
             {
-                Details = _config?.DetailsTemplate ?? BuildDetails(player),
-                State = _config?.StateTemplate ?? BuildState(capi),
-                LargeImageKey = LargeImageKey,
-                SmallImageKey = SmallImageKey,
-                SmallImageText = BuildSmallImageText(player),
-
+                Details = _config.DetailsTemplate,
+                State = _config.StateTemplate,
+                LargeImageKey = _config.LargeImageKey,
+                LargeImageText = _config.LargeImageText,
+                SmallImageKey = smallImageKey,
+                SmallImageText = _config.SmallImageText,
                 UseTimestamp = true,
-                TimestampMode = DiscordTimestampMode.Remaining
+                TimestampMode = DiscordTimestampMode.Elapsed
             };
 
             Discord.UpdateActivity(activity);
         }
         catch (Exception ex)
         {
-            if (_config is { DebugLogging: true })
-            {
-                capi.Logger.Error($"{ModLogPrefix} Failed to update presence: {ex}");
-            }
+            if (_config.DebugLogging)
+                _capi?.Logger.Error($"{Constants.ModLogPrefix} Failed to update presence: {ex}");
         }
     }
 
-    private static string BuildDetails(IClientPlayer player)
+    public static VintagePresenceConfig LoadConfig(ICoreAPI api)
     {
-        var mode = player.WorldData.CurrentGameMode;
-        return mode switch
+        var config = api.LoadModConfig<VintagePresenceConfig>(Constants.ConfigFile);
+
+        if (config is null)
         {
-            EnumGameMode.Creative => "Building in Creative",
-            EnumGameMode.Spectator => "Spectating the world",
-            EnumGameMode.Guest => "Visiting as Guest",
-            _ => "Surviving the world"
-        };
+            config = VintagePresenceConfig.CreateDefault();
+            config.IsFirstTime = true;
+            api.StoreModConfig(config, Constants.ConfigFile);
+            api.Logger.Event($"{Constants.ModLogPrefix} Created new config file");
+            return config;
+        }
+
+        if (!config.IsFirstTime) return config;
+        config.IsFirstTime = false;
+        api.StoreModConfig(config, Constants.ConfigFile);
+
+        return config;
     }
 
-    private static string BuildState(ICoreClientAPI capi)
+    public static void SaveConfig(ICoreClientAPI capi, VintagePresenceConfig config)
     {
-        var allPlayers = capi.World?.AllOnlinePlayers;
-        var playerCount = allPlayers?.Length ?? 0;
-
-        return playerCount switch
-        {
-            <= 1 => "Playing Solo",
-            2 => "Playing with 1 other player",
-            _ => $"Playing with {playerCount - 1} other players"
-        };
+        config.Validate(capi);
+        _config = config;
+        capi.StoreModConfig(config, Constants.ConfigFile);
     }
 
-    private static string BuildSmallImageText(IClientPlayer player)
+    private void LogDebug(string message)
     {
-        var deaths = player.WorldData.Deaths;
-        return $"Total deaths: {deaths}";
+        if (_config.DebugLogging)
+            _capi?.Logger.Event($"{Constants.ModLogPrefix} {message}");
     }
 
     public override void Dispose()
     {
-        if (_listenerId != 0 && _capi != null)
+        if (_updateListenerId != 0 && _capi is not null)
         {
-            _capi.Event.UnregisterGameTickListener(_listenerId);
-            _listenerId = 0;
+            _capi.Event.UnregisterGameTickListener(_updateListenerId);
+            _updateListenerId = 0;
         }
 
         Discord.ClearActivity();

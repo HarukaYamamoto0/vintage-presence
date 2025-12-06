@@ -11,12 +11,14 @@ public class ConfigGuiDialog : GuiDialog
     public override string ToggleKeyCombinationCode => Constants.ToggleKeyCombinationCode;
     public override bool DisableMouseGrab => true;
 
-    private readonly VintagePresenceConfig _config;
+    private VintagePresenceConfig _config;
 
     public ConfigGuiDialog(ICoreClientAPI capi) : base(capi)
     {
-        _config = VintagePresenceConfig.GetSettings(capi);
-        _config.Validate(capi);
+        var liveConfig = VintagePresenceMod.LoadConfig(capi);
+
+        // Always work with a local copy so as not to affect the mod until you save.
+        _config = liveConfig.Clone();
         SetupDialog();
     }
 
@@ -31,111 +33,128 @@ public class ConfigGuiDialog : GuiDialog
             .AddDialogTitleBar("Presence Settings", OnTitleBarCloseClicked)
             .BeginChildElements(bgBounds)
 
-            // Enable Rich Presence
-            .AddSwitch(val => _config.EnableRichPresence = val,
-                ElementBounds.Fixed(0, 40, SwitchSize, SwitchSize),
-                "EnableRichPresence")
-            .AddStaticText("Enable Rich Presence",
+            // Details template
+            .AddStaticText("Details template",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 42, 300, 24))
+                ElementBounds.Fixed(0, 30, 150, 20))
+            .AddTextInput(
+                ElementBounds.Fixed(0, 50, 380, 25),
+                val => _config.DetailsTemplate = val,
+                CairoFont.WhiteSmallText(),
+                "DetailsTemplate")
 
-            // Show Player Name
-            .AddSwitch(val => _config.ShowPlayerName = val,
-                ElementBounds.Fixed(0, 75, SwitchSize, SwitchSize),
-                "ShowPlayerName")
-            .AddStaticText("Show Player Name",
+            // State template
+            .AddStaticText("State template",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 77, 300, 24))
+                ElementBounds.Fixed(0, 85, 150, 20))
+            .AddTextInput(
+                ElementBounds.Fixed(0, 105, 380, 25),
+                val => _config.StateTemplate = val,
+                CairoFont.WhiteSmallText(),
+                "StateTemplate")
 
-            // Show Server Info
-            .AddSwitch(val => _config.ShowServerInfo = val,
-                ElementBounds.Fixed(0, 110, SwitchSize, SwitchSize),
-                "ShowServerInfo")
-            .AddStaticText("Show Server Info",
+            // Large Image Key
+            .AddStaticText("Large image",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 112, 300, 24))
+                ElementBounds.Fixed(0, 140, 150, 20))
+            .AddDropDown(
+                Constants.LargeImageOptions,
+                Constants.LargeImageOptions,
+                Array.IndexOf(Constants.LargeImageOptions, _config.LargeImageKey),
+                (code, _) => _config.LargeImageKey = code,
+                ElementBounds.Fixed(0, 160, 380, 25),
+                "LargeImageKey")
 
-            // Show Deaths
-            .AddSwitch(val => _config.ShowDeaths = val,
-                ElementBounds.Fixed(0, 145, SwitchSize, SwitchSize),
-                "ShowDeaths")
-            .AddStaticText("Show Deaths",
+            // LargeImageText
+            .AddStaticText("Large image text",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 147, 300, 24))
+                ElementBounds.Fixed(0, 195, 150, 20))
+            .AddTextInput(
+                ElementBounds.Fixed(0, 215, 380, 25),
+                val => _config.LargeImageText = val,
+                CairoFont.WhiteSmallText(),
+                "LargeImageText")
 
-            // Show Playtime
-            .AddSwitch(val => _config.ShowPlaytime = val,
-                ElementBounds.Fixed(0, 180, SwitchSize, SwitchSize),
-                "ShowPlaytime")
-            .AddStaticText("Show Playtime",
+            // Small Image Key
+            .AddStaticText("Small image",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 182, 300, 24))
+                ElementBounds.Fixed(0, 250, 150, 20))
+            .AddDropDown(
+                Constants.SmallImageOptions,
+                Constants.SmallImageOptions,
+                Array.IndexOf(Constants.SmallImageOptions, _config.SmallImageKey),
+                (code, _) => _config.SmallImageKey = code,
+                ElementBounds.Fixed(0, 270, 380, 25),
+                "SmallImageKey")
 
-            // Show Timestamp
-            .AddSwitch(val => _config.ShowTimestamp = val,
-                ElementBounds.Fixed(0, 215, SwitchSize, SwitchSize),
-                "ShowTimestamp")
-            .AddStaticText("Show Timestamp",
+            // SmallImageText
+            .AddStaticText("Small image text",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 217, 300, 24))
-
-            // Reset On Death
-            .AddSwitch(val => _config.ResetOnDeath = val,
-                ElementBounds.Fixed(0, 250, SwitchSize, SwitchSize),
-                "ResetOnDeath")
-            .AddStaticText("Reset on Death",
-                CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 252, 300, 24))
+                ElementBounds.Fixed(0, 305, 150, 20))
+            .AddTextInput(
+                ElementBounds.Fixed(0, 325, 380, 25),
+                val => _config.SmallImageText = val,
+                CairoFont.WhiteSmallText(),
+                "SmallImageText")
 
             // Debug Logging
             .AddSwitch(val => _config.DebugLogging = val,
-                ElementBounds.Fixed(0, 285, SwitchSize, SwitchSize),
+                ElementBounds.Fixed(0, 360, SwitchSize, SwitchSize),
                 "DebugLogging")
             .AddStaticText("Debug Logging",
                 CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(TextOffsetX, 287, 300, 24))
-
-            // Update Interval
-            .AddStaticText("Update Interval (seconds):",
-                CairoFont.WhiteDetailText(),
-                ElementBounds.Fixed(0, 325, 200, 24))
-            .AddTextInput(ElementBounds.Fixed(210, 323, 100, 30),
-                OnIntervalChanged,
-                CairoFont.WhiteDetailText(),
-                "UpdateInterval")
+                ElementBounds.Fixed(TextOffsetX, 362, 300, 24))
 
             // Buttons
-            .AddSmallButton("Save", OnSave, ElementBounds.Fixed(0, 365, 100, 30))
-            .AddSmallButton("Cancel", OnCancel, ElementBounds.Fixed(110, 365, 100, 30))
+            .AddSmallButton("Save", OnSave, ElementBounds.Fixed(0, 405, 100, 30))
+            .AddSmallButton("Reset", OnReset, ElementBounds.Fixed(110, 405, 100, 30))
+            .AddSmallButton("Cancel", OnCancel, ElementBounds.Fixed(220, 405, 100, 30))
             .EndChildElements();
 
         SingleComposer = composer.Compose();
 
-        SingleComposer.GetSwitch("EnableRichPresence").SetValue(_config.EnableRichPresence);
-        SingleComposer.GetSwitch("ShowPlayerName").SetValue(_config.ShowPlayerName);
-        SingleComposer.GetSwitch("ShowServerInfo").SetValue(_config.ShowServerInfo);
-        SingleComposer.GetSwitch("ShowDeaths").SetValue(_config.ShowDeaths);
-        SingleComposer.GetSwitch("ShowPlaytime").SetValue(_config.ShowPlaytime);
-        SingleComposer.GetSwitch("ShowTimestamp").SetValue(_config.ShowTimestamp);
-        SingleComposer.GetSwitch("ResetOnDeath").SetValue(_config.ResetOnDeath);
+        SingleComposer.GetTextInput("DetailsTemplate").SetValue(_config.DetailsTemplate);
+        SingleComposer.GetTextInput("StateTemplate").SetValue(_config.StateTemplate);
+        SingleComposer.GetTextInput("LargeImageText").SetValue(_config.LargeImageText);
+        SingleComposer.GetTextInput("SmallImageText")?.SetValue(_config.SmallImageText);
         SingleComposer.GetSwitch("DebugLogging").SetValue(_config.DebugLogging);
-        SingleComposer.GetTextInput("UpdateInterval").SetValue(_config.UpdateIntervalSeconds.ToString());
-    }
-
-    private void OnIntervalChanged(string value)
-    {
-        if (int.TryParse(value, out var interval))
-        {
-            _config.UpdateIntervalSeconds = Math.Max(5, interval);
-        }
     }
 
     private bool OnSave()
     {
-        _config.Validate(capi);
-        capi.StoreModConfig(_config, Constants.ConfigFile);
-        capi.ShowChatMessage("Rich Presence settings saved!");
+        var wasCorrect = _config.Validate(capi);
+
+        if (wasCorrect)
+        {
+            // If a correction was made, update the UI to show the corrected values.
+            SingleComposer.GetTextInput("DetailsTemplate").SetValue(_config.DetailsTemplate);
+            SingleComposer.GetTextInput("StateTemplate").SetValue(_config.StateTemplate);
+            SingleComposer.GetTextInput("LargeImageText").SetValue(_config.LargeImageText);
+            SingleComposer.GetTextInput("SmallImageText").SetValue(_config.SmallImageText);
+
+            SingleComposer.GetDropDown("LargeImageKey").SetSelectedIndex(
+                Array.IndexOf(Constants.LargeImageOptions, _config.LargeImageKey));
+            SingleComposer.GetDropDown("SmallImageKey").SetSelectedIndex(
+                Array.IndexOf(Constants.SmallImageOptions, _config.SmallImageKey));
+
+            capi.ShowChatMessage(
+                $"{Constants.ModLogPrefix} Some settings were corrected. Please review before closing.");
+            return true; // Keep it open for the user to see the fixes.
+        }
+
+        VintagePresenceMod.SaveConfig(capi, _config);
         TryClose();
+        return true;
+    }
+
+    private bool OnReset()
+    {
+        _config = VintagePresenceConfig.CreateDefault();
+
+        // Rebuilds the dialog with the default values.
+        SingleComposer?.Dispose();
+        SetupDialog();
+
         return true;
     }
 

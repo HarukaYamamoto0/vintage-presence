@@ -57,12 +57,12 @@ public sealed class DiscordActivityOptions
     /// <summary>
     /// Key for the large image asset (registered in Discord Developer Portal).
     /// </summary>
-    public string? LargeImageKey { get; set; }
+    public string? LargeImageKey { get; set; } = Constants.DefaultLargeImageKey;
 
     /// <summary>
     /// Tooltip text for the large image.
     /// </summary>
-    public string? LargeImageText { get; set; }
+    public string? LargeImageText { get; set; } = Constants.DefaultSmallImageKey;
 
     /// <summary>
     /// Key for the small image asset (registered in Discord Developer Portal).
@@ -77,7 +77,7 @@ public sealed class DiscordActivityOptions
     /// <summary>
     /// Whether to display timestamps in the Rich Presence.
     /// </summary>
-    public bool UseTimestamp { get; set; }
+    public bool UseTimestamp { get; set; } // TODO: Remove this property
 
     /// <summary>
     /// Mode for displaying timestamps (elapsed or remaining time).

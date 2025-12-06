@@ -15,6 +15,8 @@ public sealed class DiscordService : IDisposable
     private const int MaxButtonLabelLength = 32;
     private const char InvisibleFillerChar = '\u3164';
 
+    private DateTime? _elapsedStart;
+
     private DiscordRpcClient? _client;
     private DiscordActivityOptions? _currentActivity;
 
@@ -149,26 +151,22 @@ public sealed class DiscordService : IDisposable
     /// A RichPresence instance with details, state, assets, timestamps, and buttons
     /// derived from the supplied options.
     /// </returns>
-    private static RichPresence BuildRichPresence(DiscordActivityOptions activity)
+    private RichPresence BuildRichPresence(DiscordActivityOptions activity)
     {
         var presence = new RichPresence();
 
-        // Set details and state with proper truncation and padding
         if (!string.IsNullOrWhiteSpace(activity.Details))
             presence.Details = PadToMinLength(Truncate(activity.Details, MaxDetailsLength));
 
         if (!string.IsNullOrWhiteSpace(activity.State))
             presence.State = PadToMinLength(Truncate(activity.State, MaxStateLength));
 
-        // Configure assets (images)
-        var assets = new Assets();
-        ConfigureAssets(activity, assets);
-        presence.Assets = assets;
+        var assets = BuildAssets(activity);
+        if (assets is not null)
+            presence.Assets = assets;
 
-        // Configure timestamps if enabled
         ConfigureTimestamps(activity, presence);
 
-        // Configure buttons if any are defined
         var buttons = BuildButtons(activity);
         if (buttons.Count > 0)
             presence.Buttons = buttons.ToArray();
@@ -176,28 +174,39 @@ public sealed class DiscordService : IDisposable
         return presence;
     }
 
-    /// <summary>
-    /// Configures the assets (images) for the Rich Presence.
-    /// </summary>
-    /// <param name="activity">Activity options containing image configuration.</param>
-    /// <param name="assets">Assets object to configure.</param>
-    private static void ConfigureAssets(DiscordActivityOptions activity, Assets assets)
+
+    private static Assets? BuildAssets(DiscordActivityOptions activity)
     {
-        if (!string.IsNullOrWhiteSpace(activity.LargeImageKey))
-            assets.LargeImageKey = activity.LargeImageKey;
+        if (activity.LargeImageKey is null && activity.SmallImageKey is null) return null;
 
-        if (!string.IsNullOrWhiteSpace(activity.LargeImageText))
+        var hasLargeKey = !string.IsNullOrWhiteSpace(activity.LargeImageKey);
+        var hasSmallKey = !string.IsNullOrWhiteSpace(activity.SmallImageKey);
+        var hasLargeText = !string.IsNullOrWhiteSpace(activity.LargeImageText);
+        var hasSmallText = !string.IsNullOrWhiteSpace(activity.SmallImageText);
+
+        // Nothing to show?
+        if (!hasLargeKey && !hasSmallKey && !hasLargeText && !hasSmallText)
+            return null;
+
+        var assets = new Assets();
+
+        if (hasLargeKey)
+            assets.LargeImageKey = activity.LargeImageKey!;
+
+        if (hasLargeText)
             assets.LargeImageText = PadToMinLength(
-                Truncate(activity.LargeImageText, MaxImageTextLength)
+                Truncate(activity.LargeImageText!, MaxImageTextLength)
             );
 
-        if (!string.IsNullOrWhiteSpace(activity.SmallImageKey))
-            assets.SmallImageKey = activity.SmallImageKey;
+        if (hasSmallKey)
+            assets.SmallImageKey = activity.SmallImageKey!;
 
-        if (!string.IsNullOrWhiteSpace(activity.SmallImageText))
+        if (hasSmallText)
             assets.SmallImageText = PadToMinLength(
-                Truncate(activity.SmallImageText, MaxImageTextLength)
+                Truncate(activity.SmallImageText!, MaxImageTextLength)
             );
+
+        return assets;
     }
 
     /// <summary>
@@ -205,19 +214,32 @@ public sealed class DiscordService : IDisposable
     /// </summary>
     /// <param name="activity">Activity options containing timestamp configuration.</param>
     /// <param name="presence">RichPresence object to configure.</param>
-    private static void ConfigureTimestamps(DiscordActivityOptions activity, RichPresence presence)
+    private void ConfigureTimestamps(DiscordActivityOptions activity, RichPresence presence)
     {
         if (!activity.UseTimestamp)
-            return;
-
-        presence.Timestamps = activity.TimestampMode switch
         {
-            DiscordTimestampMode.Elapsed => new Timestamps(DateTime.UtcNow),
-            DiscordTimestampMode.Remaining when activity.EndTimeSeconds.HasValue
-                => BuildRemainingTimestamp(activity.EndTimeSeconds.Value),
-            _ => presence.Timestamps ?? new Timestamps()
-        };
+            presence.Timestamps = null;
+            return;
+        }
+
+        switch (activity.TimestampMode)
+        {
+            case DiscordTimestampMode.Elapsed:
+                _elapsedStart ??= DateTime.UtcNow;
+                presence.Timestamps = new Timestamps(_elapsedStart.Value);
+                break;
+
+            case DiscordTimestampMode.Remaining when activity.EndTimeSeconds.HasValue:
+                presence.Timestamps = BuildRemainingTimestamp(activity.EndTimeSeconds.Value);
+                break;
+
+            case DiscordTimestampMode.None:
+            default:
+                presence.Timestamps = null;
+                break;
+        }
     }
+
 
     /// <summary>
     /// Creates button entries for Rich Presence based on the configured labels and URLs.
@@ -244,7 +266,7 @@ public sealed class DiscordService : IDisposable
     /// <param name="buttons">Button collection to add to.</param>
     private static void AddButtonIfValid(string? label, string? url, List<Button> buttons)
     {
-        if (!string.IsNullOrWhiteSpace(label) && 
+        if (!string.IsNullOrWhiteSpace(label) &&
             !string.IsNullOrWhiteSpace(url))
         {
             buttons.Add(new Button
