@@ -66,6 +66,8 @@ public sealed class VintagePresenceMod : ModSystem
             var engine = new PresenceTemplateEngine();
             var details = engine.Render(_config.DetailsTemplate, ctx);
             var state = engine.Render(_config.StateTemplate, ctx);
+            var largeImageText = engine.Render(_config.LargeImageText, ctx);
+            var smallImageText = engine.Render(_config.SmallImageText, ctx);
 
             var smallImageKey = _config.SmallImageKey;
             if (smallImageKey == "none") smallImageKey = null;
@@ -75,9 +77,9 @@ public sealed class VintagePresenceMod : ModSystem
                 Details = details,
                 State = state,
                 LargeImageKey = _config.LargeImageKey,
-                LargeImageText = _config.LargeImageText,
+                LargeImageText = largeImageText,
                 SmallImageKey = smallImageKey,
-                SmallImageText = _config.SmallImageText,
+                SmallImageText = smallImageText,
                 UseTimestamp = true,
                 TimestampMode = DiscordTimestampMode.Elapsed
             };
@@ -102,6 +104,15 @@ public sealed class VintagePresenceMod : ModSystem
         var calendar = world.Calendar;
         var pos = entity.Pos.AsBlockPos;
 
+        var gamemode = player.WorldData.CurrentGameMode switch
+        {
+            EnumGameMode.Creative => "creative",
+            EnumGameMode.Survival => "survival",
+            EnumGameMode.Spectator => "spectator",
+            EnumGameMode.Guest => "guest",
+            _ => "unknown"
+        };
+
         // Climate
         var climate = world.BlockAccessor.GetClimateAt(pos);
 
@@ -116,10 +127,10 @@ public sealed class VintagePresenceMod : ModSystem
         // Time of day
         var timeOfDay = hour switch
         {
-            >= 5 and < 10 => "Morning",
-            >= 10 and < 17 => "Day",
-            >= 17 and < 21 => "Evening",
-            _ => "Night"
+            >= 5 and < 10 => "morning",
+            >= 10 and < 17 => "day",
+            >= 17 and < 21 => "evening",
+            _ => "night"
         };
 
         // Weather
@@ -128,10 +139,10 @@ public sealed class VintagePresenceMod : ModSystem
 
         var weather = climate?.Temperature switch
         {
-            <= 0f when isRaining => "Snow",
-            <= 0f => "Cold",
-            _ when isRaining => "Rain",
-            _ => "Clear"
+            <= 0f when isRaining => "snow",
+            <= 0f => "cold",
+            _ when isRaining => "rain",
+            _ => "clear"
         };
 
         // Season
@@ -143,7 +154,7 @@ public sealed class VintagePresenceMod : ModSystem
 
         return new PresenceContext
         {
-            GameMode = player.WorldData.CurrentGameMode.ToString(),
+            GameMode = gamemode,
             Day = (int)totalDays,
             TimeOfDay = timeOfDay,
             PlayerName = player.PlayerName,

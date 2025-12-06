@@ -13,10 +13,7 @@ internal static class Constants
     internal const string DefaultLargeImageText = "Vintage Presence Mod";
 
     internal const string DefaultSmallImageKey = "gear";
-
-    internal const string DefaultSmallImageText = "Vintage Story";
-    // TODO: Add the return when you make the templates.
-    // internal const string DefaultSmallImageText = "Deaths: {deaths}";
+    internal const string DefaultSmallImageText = "Deaths: {deaths}";
 
     internal const int UpdateIntervalInMs = 5000;
 
