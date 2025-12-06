@@ -8,7 +8,7 @@
         <OutputPath>bin/$(Configuration)/Mods/vintagepresence/</OutputPath>
 
         <ZipName>vintage_presence</ZipName>
-        <ModVersion>1.1.1</ModVersion>
+        <ModVersion>1.1.2</ModVersion>
         <ReleaseDir>$(ProjectDir)Releases</ReleaseDir>
     </PropertyGroup>
 
